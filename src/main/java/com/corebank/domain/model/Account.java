@@ -1,6 +1,9 @@
 package com.corebank.domain.model;
 
+import com.corebank.domain.event.AccountCreatedEvent;
+import com.corebank.domain.event.DepositMadeEvent;
 import com.corebank.domain.event.DomainEvent;
+import com.corebank.domain.event.WithdrawalMadeEvent;
 import com.corebank.domain.exception.InsufficientBalanceException;
 import com.corebank.domain.exception.InvalidTransactionException;
 
@@ -55,18 +58,22 @@ public class Account {
     }
 
     public static Account create(String holderName, String document) {
-        return new Account(
+        Account account = new Account(
                 UUID.randomUUID(),
                 holderName,
                 document,
                 BigDecimal.ZERO,
                 LocalDateTime.now(),
                 0L);
+        account.registerEvent(new AccountCreatedEvent(
+                account.getId(), holderName, document, LocalDateTime.now()));
+        return account;
     }
 
     public void deposit(BigDecimal amount) {
         validateAmount(amount);
         this.balance = this.balance.add(amount);
+        registerEvent(new DepositMadeEvent(this.id, amount, this.balance, LocalDateTime.now()));
     }
 
     public void withdraw(BigDecimal amount) {
@@ -75,12 +82,20 @@ public class Account {
             throw new InsufficientBalanceException("Insufficient balance for withdrawal");
         }
         this.balance = this.balance.subtract(amount);
+        registerEvent(new WithdrawalMadeEvent(this.id, amount, this.balance, LocalDateTime.now()));
     }
 
     private void validateAmount(BigDecimal amount) {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new InvalidTransactionException("Transaction amount must be greater than zero");
         }
+    }
+
+    /**
+     * Registers a domain event for later publishing by the application layer.
+     */
+    protected void registerEvent(DomainEvent event) {
+        domainEvents.add(event);
     }
 
     public List<DomainEvent> getDomainEvents() {
